@@ -2,9 +2,9 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy.random as ran
-import scipy.optimize as curve_fit
+import scipy.optimize as opt
 import scipy.stats as stat
-
+import randomcolor
 
 # create a function to locate the fle data 
 def file_name(target):
@@ -34,7 +34,7 @@ def data(file_location, Filter, instrument):
     flux_new = []
     fluxerr_new = []
     for index in range(len(mag)):
-        if mag[index] >= 0 and magerr[index] != 1.086 and magerr[index] > 0:
+        if mag[index] >= 0 and fluxcal[index] != fluxcalerr[index] and fluxcal[index] > fluxcalerr[index] and magerr[index] > 0:
             mag_new.append(mag[index])
             MJD_new.append(MJD[index])
             magerr_new.append(magerr[index])
@@ -64,74 +64,201 @@ def data(file_location, Filter, instrument):
 
 
 
+
+
 # create LC model
 #fit function for Supernovae model
-def rise(time, A, B, t0, Trise):
+
+def rise1(time, A, B, t0, t1, Trise):
     """
     Parameters:
-    
-    time == t(MJD)
-    
+    time == t(MJD) in array
     A == Amplitude
-    
     B == Beta
-    
     t0 == t0
-    
     Trise == tau_rise 
-    
-    t < t1(platue onset)
+    condition: t < t1(platue onset)
     """
-    return (A + B * (time - t0)) / ( 1 + np.exp((-(time - t0))/ Trise))
+    rise =[]
+    for i in range(len(time)):
+        if time[i] < t1:
+            rise.append((A + B * (time[i]- t0)) / ( 1 + np.exp((-(time[i] - t0))/ Trise)))
+        else:
+            pass   
+    return rise
+#def rise(time, A, B, t0, t1, Trise):
+    """ I thought that is not correct for t < t1
+    """
+#    return (A + B * (time- t0)) / ( 1 + np.exp((-(time - t0))/ Trise))
 
-def fall(time, A, B, t0, Trise, Tfall, t1):
+
+
+def fall(time, A, B, t0, t1, Trise, Tfall):
     """
     Parameters:
-    
     x == t(MJD)
-    
     A == Amplitude
-    
-    B == Beta
-    
-    t0 == t0
-
-    ti == t1 
-    
+    B == Beta (Plateau slope)
+    t0 == t0 (Plateau start)
+    ti == t1 (Plateau end)
     Trise== tau_rise 
-    
     Tfall == tau_fall 
-    
     x >= t1
     """
-    return ((A + B * (t1 - t0)) * np.exp((-(time - t1))/Tfall)) / (1 + np.exp((-(time - t0)) / Trise))
+    fall = [] 
+    for i in range(len(time)):
+        if time[i] >= t1:
+            fall.append(((A + B * (t1 - t0)) * np.exp((-(time[i] - t1))/Tfall)) / (1 + np.exp((-(time[i] - t0)) / Trise))) 
+        else:
+            pass
 
-def SN_LC(time, A, B, t0, Trise, Tfall, t1, zero_points):
-    para_rise = np.array([ A, B, t0, Trise])
-    para_fall = np.array([ A, B, t0, Trise, Tfall, t1])
-    flux_rise = rise(time, *para_rise)
+    return fall
+def SN_LC(time, A, B, t0, t1,Trise, Tfall, zero_points):
+    para_rise = np.array([ A, B, t0, t1, Trise])
+    para_fall = np.array([ A, B, t0, t1, Trise, Tfall])
+    flux_rise = rise1(time, *para_rise)
     flux_fall = fall(time, *para_fall)
-    index_change = np.where(time < t1) 
-    flux = np.array([flux_rise[:index_change], flux_fall[index_change:]]) # index_change is not an integer
-    return -2.5 * np.log10(flux) + zero_points # return to the expected Magitude base on the fit function
+    flux = np.concatenate((flux_rise, flux_fall))
+    result = (-2.5 * np.log10(flux) + zero_points) # return to the expected Magitude base on the fit function
+    return result
+# plot the amplitude for testing
+
+def plot_Amp(counts, x):
+    """counts = number of plots
+
+        x = MJD in array  
+    """
+    rand_color = randomcolor.RandomColor()
+    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
+    plt.figure(figsize = (8,6))
+    for i in range(counts):
+        fsmooth = SN_LC(xsmooth, A = i * 0.1, B = 1, t0 = 58186, t1 = 58190, Trise = 15, Tfall = 0, zero_points = 20)
+        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'A = {x}'.format(x = i* 0))
+    plt.title('change in A(amplitude)')
+    plt.gca().invert_yaxis()
+    return plt.legend(loc =(1, 0.5))
+
+
+
+def plot_Beta(counts, x):
+    """counts = number of plots
+
+        x = MJD in array  
+    """
+    rand_color = randomcolor.RandomColor()
+    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
+    plt.figure(figsize = (8,6))
+    for i in range(counts):
+        fsmooth = SN_LC(xsmooth, A = 1, B = -i * 0.001, t0 = 58186, t1 = 58202, Trise = 120, Tfall = 120, zero_points = 20)
+        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'B = {x}'.format(x = - i * 0.001))
+    plt.title('change in B(Beta)')
+    plt.gca().invert_yaxis()
+    return plt.legend(loc =(1, 0.5))
+
+
+
+
+
+def plot_t0(counts, x):
+    """counts = number of plots
+
+        x = MJD in array  
+    """
+    rand_color = randomcolor.RandomColor()
+    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
+    plt.figure(figsize = (8,6))
+    for i in range(counts):
+        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186 - 100 * i , t1 = 58202, Trise = 120, Tfall = 120, zero_points = 20)
+        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 't0 = {x}'.format(x = 58186 - 100 * i))
+    plt.title('change in t0(start time)')
+    plt.gca().invert_yaxis()
+    return plt.legend(loc =(1, 0.5))
+
+def plot_t1(counts, x):
+    """counts = number of plots
+
+        x = MJD in array  
+    """
+    rand_color = randomcolor.RandomColor()
+    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
+    plt.figure(figsize = (8,6))
+    for i in range(counts):
+        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186  , t1 = 58202  + 10 * i, Trise = 120, Tfall = 120, zero_points = 20)
+        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 't1 = {x}'.format(x = 58186 + 10 * i))
+    plt.title('change in t1(end time)')
+    plt.gca().invert_yaxis()
+    return plt.legend(loc =(1, 0.5))
+
+def plot_Trise(counts, x):
+    """counts = number of plots
+
+        x = MJD in array  
+    """
+    rand_color = randomcolor.RandomColor()
+    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
+    plt.figure(figsize = (8,6))
+    for i in range(counts):
+        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186  , t1 = 58202, Trise = 120 - 10 *i , Tfall = 120, zero_points = 20)
+        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'Trise = {x}'.format(x = 120 - 10 * i))
+    plt.title('change in Trise(rising time)')
+    plt.gca().invert_yaxis()
+    return plt.legend(loc =(1, 0.5))
+
+def plot_Tfall(counts, x):
+    """counts = number of plots
+
+        x = MJD in array  
+    """
+    rand_color = randomcolor.RandomColor()
+    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
+    plt.figure(figsize = (8,6))
+    for i in range(counts):
+        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186  , t1 = 58202, Trise = 120  , Tfall = 120 + 10 * i, zero_points = 20)
+        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'Tfall= {x}'.format(x = 120 + 10 * i))
+    plt.title('change in Tfall(falling time)')
+    plt.gca().invert_yaxis()
+    return plt.legend(loc =(1, 0.5))
+
+
     
 
+def curvefitting_and_plot(fitfunction, x, y, dy, guessparams, xrange= [-1, 1], yrange= [-1, 1], make_image = 0, target_and_filter_inst = 'target') :
+    """
+    x , y, dy == real data
+
+    fitfunction == SN_LC model 
+    """
+    plt.rcParams["figure.figsize"] = (12,4)  
+    plt.xlabel("MJD")
+    plt.ylabel("Mag") 
+    plt.title(target_and_filter_inst)
+    if yrange == [-1,1]:
+        yspan = max(y) - min(y)
+        yrange = [min(y) - yspan/10, max(y) + yspan/10]
+
+    if xrange == [-1,1]:
+        xspan = max(x) - min(x)
+        xrange = [min(x) - xspan/10, max(x) + xspan/10]
+
+    plt.gca().invert_yaxis()
+    plt.scatter(x , y)
+    plt.errorbar(x , y, dy, ls='none', fmt ='.')
+
+    xsmooth1 = np.linspace(np.min(x), np.max(x), len(x))
+    #fsmooth1 = fitfunction(xsmooth1 , *guessparams)
+    #plt.plot(xsmooth1, fsmooth1, color = 'red')
+
+    popt, pcov = opt.curve_fit(fitfunction, x, y, p0 = guessparams)
+    for i in range(len(popt)):
+        print('para',i,'=',popt[i],'+/-',np.sqrt(pcov[i,i]))
+
+    fsmooth2 = fitfunction(xsmooth1, *popt)
+    plt.plot(xsmooth1, fsmooth2, color = 'orange', label = 'fit: A = %5.3f, B = %5.3f, t0= %5.3f, t1= %5.3f, Trise =%5.3f, Tfall = %5.3f, Zero_points = %5.3f' % tuple(popt))
+    plt.legend()
+
+    
+    if make_image > 0:
+        plt.savefig('Test.png', format = 'png')
+    plt.show()
 
 
-# test for  in gp filter)
-target = "2018agk"
-file_location = file_name(target)
-original_data = data(file_location,'gp', 'Sinistro')
-#print(original_data[0])
-xsmooth1 = np.linspace(np.min(original_data[0]), np.max(original_data[0]), 1000)
-#print(xsmooth1)
-
-
-A = 3 
-B = 1 
-Trise = 20 
-Tfall = 120
-t0 = 58186
-t1 = 58202
-zero_points = 0 
-fsmooth1 = SN_LC(xsmooth1, A, B, t0, Trise, Tfall, t1, zero_points)
