@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 import numpy.random as ran
 import scipy.optimize as opt
 import scipy.stats as stat
-import randomcolor
+
 
 # create a function to locate the fle data 
 def file_name(target):
-    return "C:/Users/Sam/Downloads/{target}_data.snana.txt".format(target = target) #file locaiton 
+    return "/Users/eddie_tang/Desktop/{target}_data.snana.txt".format(target = target) #file locaiton 
 
 
 # import the data from the files
@@ -24,9 +24,13 @@ def data(file_location, Filter, instrument):
     Instrument = df['INSTRUMENT'].to_numpy()
     unique_filter = np.unique(filter)
     unique_Instrument = np.unique(Instrument)
+    #mag = mag[MJD.argsort()[::]]
+    #MJD = MJD[MJD.argsort()[::]]
+    #magerr = magerr[MJD.argsort()[::]]
+
 #    print(mag)                        # to show all the mag 
-    print(unique_filter)              # to show what kind of filters are there
-    print(unique_Instrument)          # to show the Instrument
+#    print(unique_filter)              # to show what kind of filters are there
+#    print(unique_Instrument)          # to show the Instrument
     
     mag_new = [] 
     MJD_new = []
@@ -53,13 +57,13 @@ def data(file_location, Filter, instrument):
     MJD_list = []
     mag_err_list = []
     for k in range(len(mag_new)):
-        if Instrument[k] == instrument:
+        if Instrument[k] == instrument and filter[k] == Filter:
             mag_list.append(mag_new[k])
             MJD_list.append(MJD_new[k])
             mag_err_list.append(magerr_new[k])
         else:
             pass
-        
+    
     return MJD_list, mag_list, mag_err_list
 
 
@@ -79,7 +83,7 @@ def rise1(time, A, B, t0, t1, Trise):
     Trise == tau_rise 
     condition: t < t1(platue onset)
     """
-    rise =[]
+    rise = []
     for i in range(len(time)):
         if time[i] < t1:
             rise.append((A + B * (time[i]- t0)) / ( 1 + np.exp((-(time[i] - t0))/ Trise)))
@@ -113,121 +117,30 @@ def fall(time, A, B, t0, t1, Trise, Tfall):
             pass
 
     return fall
-def SN_LC(time, A, B, t0, t1,Trise, Tfall, zero_points):
+
+
+
+def SN_LC(time, A, B, t0, t1,Trise, Tfall,c):
     para_rise = np.array([ A, B, t0, t1, Trise])
     para_fall = np.array([ A, B, t0, t1, Trise, Tfall])
     flux_rise = rise1(time, *para_rise)
     flux_fall = fall(time, *para_fall)
     flux = np.concatenate((flux_rise, flux_fall))
-    result = (-2.5 * np.log10(flux) + zero_points) # return to the expected Magitude base on the fit function
+    result = -2.5 * np.log10(flux/27.5) +c #+17.5  # return to the expected Magitude base on the fit function
+
+
     return result
 # plot the amplitude for testing
 
-def plot_Amp(counts, x):
-    """counts = number of plots
-
-        x = MJD in array  
+   
+def curvefitting_and_plot(fitfunction, x, y, dy, guessparam, xrange= [-1, 1], yrange= [-1, 1], make_image = 0, target_and_filter_inst = 'target') :
     """
-    rand_color = randomcolor.RandomColor()
-    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
-    plt.figure(figsize = (8,6))
-    for i in range(counts):
-        fsmooth = SN_LC(xsmooth, A = i * 0.1, B = 1, t0 = 58186, t1 = 58190, Trise = 15, Tfall = 0, zero_points = 20)
-        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'A = {x}'.format(x = i* 0))
-    plt.title('change in A(amplitude)')
-    plt.gca().invert_yaxis()
-    return plt.legend(loc =(1, 0.5))
-
-
-
-def plot_Beta(counts, x):
-    """counts = number of plots
-
-        x = MJD in array  
-    """
-    rand_color = randomcolor.RandomColor()
-    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
-    plt.figure(figsize = (8,6))
-    for i in range(counts):
-        fsmooth = SN_LC(xsmooth, A = 1, B = -i * 0.001, t0 = 58186, t1 = 58202, Trise = 120, Tfall = 120, zero_points = 20)
-        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'B = {x}'.format(x = - i * 0.001))
-    plt.title('change in B(Beta)')
-    plt.gca().invert_yaxis()
-    return plt.legend(loc =(1, 0.5))
-
-
-
-
-
-def plot_t0(counts, x):
-    """counts = number of plots
-
-        x = MJD in array  
-    """
-    rand_color = randomcolor.RandomColor()
-    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
-    plt.figure(figsize = (8,6))
-    for i in range(counts):
-        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186 - 100 * i , t1 = 58202, Trise = 120, Tfall = 120, zero_points = 20)
-        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 't0 = {x}'.format(x = 58186 - 100 * i))
-    plt.title('change in t0(start time)')
-    plt.gca().invert_yaxis()
-    return plt.legend(loc =(1, 0.5))
-
-def plot_t1(counts, x):
-    """counts = number of plots
-
-        x = MJD in array  
-    """
-    rand_color = randomcolor.RandomColor()
-    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
-    plt.figure(figsize = (8,6))
-    for i in range(counts):
-        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186  , t1 = 58202  + 10 * i, Trise = 120, Tfall = 120, zero_points = 20)
-        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 't1 = {x}'.format(x = 58186 + 10 * i))
-    plt.title('change in t1(end time)')
-    plt.gca().invert_yaxis()
-    return plt.legend(loc =(1, 0.5))
-
-def plot_Trise(counts, x):
-    """counts = number of plots
-
-        x = MJD in array  
-    """
-    rand_color = randomcolor.RandomColor()
-    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
-    plt.figure(figsize = (8,6))
-    for i in range(counts):
-        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186  , t1 = 58202, Trise = 120 - 10 *i , Tfall = 120, zero_points = 20)
-        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'Trise = {x}'.format(x = 120 - 10 * i))
-    plt.title('change in Trise(rising time)')
-    plt.gca().invert_yaxis()
-    return plt.legend(loc =(1, 0.5))
-
-def plot_Tfall(counts, x):
-    """counts = number of plots
-
-        x = MJD in array  
-    """
-    rand_color = randomcolor.RandomColor()
-    xsmooth = np.linspace(np.min(x), np.max(x), 1000)
-    plt.figure(figsize = (8,6))
-    for i in range(counts):
-        fsmooth = SN_LC(xsmooth, A = 5, B = 1, t0 = 58186  , t1 = 58202, Trise = 120  , Tfall = 120 + 10 * i, zero_points = 20)
-        plt.plot(xsmooth, fsmooth, color = rand_color.generate(count = counts)[i], label = 'Tfall= {x}'.format(x = 120 + 10 * i))
-    plt.title('change in Tfall(falling time)')
-    plt.gca().invert_yaxis()
-    return plt.legend(loc =(1, 0.5))
-
-
-    
-
-def curvefitting_and_plot(fitfunction, x, y, dy, guessparams, xrange= [-1, 1], yrange= [-1, 1], make_image = 0, target_and_filter_inst = 'target') :
-    """
-    x , y, dy == real data
+    x , y, dy == real data(should be an numpy array)
 
     fitfunction == SN_LC model 
     """
+    #x = x - np.mean(x)
+    #y = y - np.mean(y)
     plt.rcParams["figure.figsize"] = (12,4)  
     plt.xlabel("MJD")
     plt.ylabel("Mag") 
@@ -243,17 +156,37 @@ def curvefitting_and_plot(fitfunction, x, y, dy, guessparams, xrange= [-1, 1], y
     plt.gca().invert_yaxis()
     plt.scatter(x , y)
     plt.errorbar(x , y, dy, ls='none', fmt ='.')
-
     xsmooth1 = np.linspace(np.min(x), np.max(x), len(x))
-    #fsmooth1 = fitfunction(xsmooth1 , *guessparams)
-    #plt.plot(xsmooth1, fsmooth1, color = 'red')
+ #   fsmooth1 = fitfunction(xsmooth1 , *guessparam)
+ #   plt.plot(xsmooth1, fsmooth1, color = 'red')
 
-    popt, pcov = opt.curve_fit(fitfunction, x, y, p0 = guessparams)
+    ######guessparam for the scipy.curve_fit:
+    A = (np.max(y)-np.min(y) + (np.max(y)-np.min(y))/2)
+    B = ( - ((np.min(y) - np.max(y)) / (x[np.argmin(y)] - x[np.argmax(y)])) - 1)
+    t0 = (x[np.argmax(y)])# x[np.argmin(y)] + 10
+    t1 = (x[np.argmax(y)] + 10)
+    Trise = (x[np.argmin(y)] - np.min(x) + (x[np.argmin(y)] - np.min(x))/2)
+    Tfall = (np.max(x) - x[np.argmin(y)] + (np.max(x) - x[np.argmin(y)])/2)
+    ######
+
+    # t1 >> 0 
+    #bounds_sequence = (A, B, t0, t1,Trise, Tfall)
+    init_bounds = (0 ,  - ((np.min(y) - np.max(y)) / (x[np.argmin(y)] - x[np.argmax(y)])) - 1, np.min(x)-5,x[np.argmin(y)], 0, 0)
+    fina_bounds = (np.max(y)-np.min(y) + (np.max(y)-np.min(y))/2, 0,
+    x[np.argmin(y)] + 10, np.max(x), 
+    x[np.argmin(y)] - np.min(x) + (x[np.argmin(y)] - np.min(x))/2,
+     np.max(x) - x[np.argmin(y)] + (np.max(x) - x[np.argmin(y)])/2)
+    
+    
+    
+    xsmooth1 = np.linspace(np.min(x), np.max(x), len(x))
+    popt, pcov = opt.curve_fit(fitfunction, x, y, p0 = guessparam, sigma= dy)
+
     for i in range(len(popt)):
         print('para',i,'=',popt[i],'+/-',np.sqrt(pcov[i,i]))
 
     fsmooth2 = fitfunction(xsmooth1, *popt)
-    plt.plot(xsmooth1, fsmooth2, color = 'orange', label = 'fit: A = %5.3f, B = %5.3f, t0= %5.3f, t1= %5.3f, Trise =%5.3f, Tfall = %5.3f, Zero_points = %5.3f' % tuple(popt))
+    plt.plot(xsmooth1, fsmooth2, color = 'orange', label = 'fit: A = %5.3f, B = %5.3f, t0= %5.3f, t1= %5.3f, Trise =%5.3f, Tfall = %5.3f, c = %5.3f' % tuple(popt))
     plt.legend()
 
     
@@ -261,4 +194,5 @@ def curvefitting_and_plot(fitfunction, x, y, dy, guessparams, xrange= [-1, 1], y
         plt.savefig('Test.png', format = 'png')
     plt.show()
 
+#distance for best fit  for model line / distance of the error bar
 
