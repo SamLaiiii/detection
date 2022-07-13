@@ -4,11 +4,15 @@ import matplotlib.pyplot as plt
 import numpy.random as ran
 import scipy.optimize as opt
 import scipy.stats as stat
-
+import matplotlib
+import matplotlib.cm as cm
+from  itertools import islice
+import random
+import species
 
 # create a function to locate the fle data 
 def file_name(target):
-    return "/Users/eddie_tang/Desktop/{target}_data.snana.txt".format(target = target) #file locaiton 
+    return "/Users/eddie_tang/Desktop/Photometry file/{target}_data.snana.txt".format(target = target) #file locaiton 
 
 
 # import the data from the files
@@ -63,9 +67,48 @@ def data(file_location, Filter, instrument):
             mag_err_list.append(magerr_new[k])
         else:
             pass
-    
+#    for i in range(len(Filter)):
     return MJD_list, mag_list, mag_err_list
 
+def multi(filters, Instrument, file_location):
+    MJD = []
+    Mag = []
+    Magerr = []
+    for i in range(len(filters)):
+        all_data = data(file_location = file_location, Filter = filters[i]  , instrument = Instrument)
+        MJD.append(all_data[0])
+        Mag.append(all_data[1])
+        Magerr.append(all_data[2])
+    return MJD, Mag, Magerr
+
+
+def mag_to_flux(mag, mag_err, Filter_ID):
+    synphot = species.SyntheticPhotometry(Filter_ID)
+    flux = np.array([])
+    flux_err = np.array([])
+    for i in range(len(mag)):
+        for j in range(len(mag[i])):
+            Flux,error = synphot.magnitude_to_flux(mag[i][j], error=mag_err[i][j], zp_flux=27.5)
+            flux = np.append(flux, Flux)
+            flux_err = np.append(flux_err, error)
+
+    input = flux 
+    len_to_split = [] 
+    for i in range(len(mag)):
+        len_to_split.append(len(mag[i]))
+    Inputt = iter(input)
+    Output_flux = [list(islice(Inputt, elem))
+                for elem in len_to_split]
+
+    input1 = flux_err
+    len_to_split = [] 
+    for i in range(len(mag)):
+        len_to_split.append(len(mag[i]))
+    Inputt = iter(input1)
+    Output_flux_err = [list(islice(Inputt, elem))
+                for elem in len_to_split]    
+
+    return Output_flux, Output_flux_err
 
 
 
@@ -120,24 +163,25 @@ def fall(time, A, B, t0, t1, Trise, Tfall):
 
 
 
-def SN_LC(time, A, B, t0, t1,Trise, Tfall,c):
+def SN_LC(time, A, B, t0, t1,Trise, Tfall, c):
     para_rise = np.array([ A, B, t0, t1, Trise])
     para_fall = np.array([ A, B, t0, t1, Trise, Tfall])
     flux_rise = rise1(time, *para_rise)
     flux_fall = fall(time, *para_fall)
-    flux = np.concatenate((flux_rise, flux_fall))
-    result = -2.5 * np.log10(flux/27.5) +c #+17.5  # return to the expected Magitude base on the fit function
+    flux = np.concatenate((flux_rise, flux_fall)) + c
+    return flux
+#    result = -2.5 * np.log10(flux/27.5) + c #+17.5  # return to the expected Magitude base on the fit function
 
 
     return result
 # plot the amplitude for testing
 
    
-def curvefitting_and_plot(fitfunction, x, y, dy, guessparam, xrange= [-1, 1], yrange= [-1, 1], make_image = 0, target_and_filter_inst = 'target') :
+def curvefitting_and_plot(fitfunction, x, x1,  y, y1, dy, dy1, guessparam, xrange= [-1, 1], yrange= [-1, 1], make_image = 0, target_and_filter_inst = 'target' ) :
     """
     x , y, dy == real data(should be an numpy array)
-
     fitfunction == SN_LC model 
+
     """
     #x = x - np.mean(x)
     #y = y - np.mean(y)
@@ -153,12 +197,11 @@ def curvefitting_and_plot(fitfunction, x, y, dy, guessparam, xrange= [-1, 1], yr
         xspan = max(x) - min(x)
         xrange = [min(x) - xspan/10, max(x) + xspan/10]
 
-    plt.gca().invert_yaxis()
-    plt.scatter(x , y)
-    plt.errorbar(x , y, dy, ls='none', fmt ='.')
+#    plt.errorbar(x,y,dy,fmt = '.', ecolor = 'blue')
+#    plt.gca().invert_yaxis()
     xsmooth1 = np.linspace(np.min(x), np.max(x), len(x))
- #   fsmooth1 = fitfunction(xsmooth1 , *guessparam)
- #   plt.plot(xsmooth1, fsmooth1, color = 'red')
+    fsmooth1 = fitfunction(xsmooth1 , *guessparam)
+    plt.plot(xsmooth1, fsmooth1, color = 'red')
 
     ######guessparam for the scipy.curve_fit:
     A = (np.max(y)-np.min(y) + (np.max(y)-np.min(y))/2)
@@ -180,19 +223,190 @@ def curvefitting_and_plot(fitfunction, x, y, dy, guessparam, xrange= [-1, 1], yr
     
     
     xsmooth1 = np.linspace(np.min(x), np.max(x), len(x))
+    xsmooth2 = np.linspace(np.min(x1), np.max(x1), len(x1))
     popt, pcov = opt.curve_fit(fitfunction, x, y, p0 = guessparam, sigma= dy)
-
+    popt1, pcov1 = opt.curve_fit(fitfunction, x1, y1, p0 = guessparam, sigma= dy1)
     for i in range(len(popt)):
         print('para',i,'=',popt[i],'+/-',np.sqrt(pcov[i,i]))
 
     fsmooth2 = fitfunction(xsmooth1, *popt)
+    fsmooth3 = fitfunction(xsmooth2, *popt1)
     plt.plot(xsmooth1, fsmooth2, color = 'orange', label = 'fit: A = %5.3f, B = %5.3f, t0= %5.3f, t1= %5.3f, Trise =%5.3f, Tfall = %5.3f, c = %5.3f' % tuple(popt))
+    plt.plot(xsmooth2, fsmooth3, color = 'orange', label = 'fit: A = %5.3f, B = %5.3f, t0= %5.3f, t1= %5.3f, Trise =%5.3f, Tfall = %5.3f, c = %5.3f' % tuple(popt1))##
     plt.legend()
-
+    Expect = fitfunction(x, *popt)
+    Expect1 = fitfunction(x1, *popt1)
+    score = []
+    for i in range(len(Expect)):
+        score.append((Expect[i]- y[i])**2/(dy[i])**2)
+    score1 = [] 
+    for i in range(len(Expect1)):
+        score1.append((Expect1[i]- y1[i])**2/(dy1[i])**2)
+    plt.scatter(x, y, c = score, cmap = 'summer')
+    plt.scatter(x1, y1, c = score1, cmap = 'summer')
+    plt.colorbar(label = 'least anomalous / the most anomalous', orientation="horizontal")
+    norm = matplotlib.colors.Normalize(vmin = min(y), vmax = max(y), clip = True)
+    mapper = cm.ScalarMappable(norm=norm, cmap='viridis')
+    x_color = np.array([(mapper.to_rgba(v)) for v in y])
+    x_color1 = np.array([(mapper.to_rgba(v)) for v in y1])
+    for x, y, e, color in zip(x, y, dy, x_color):
+        plt.plot(x, y, 'o', color=color)
+        plt.errorbar(x, y, e, lw=1, capsize=3, color=color)
+    
+    for x1, y1, e, color in zip(x1, y1, dy1, x_color1):
+        plt.plot(x1, y1, 'o', color=color)
+        plt.errorbar(x1, y1, e, lw=1, capsize=3, color=color)
+#    plt.errorbar(x,y,yerr=dy, marker=None, mew=0)
+    plt.legend()
+    plt.gca().invert_yaxis()
+#    plt.scatter(x , y)
+#    plt.errorbar(x , y, dy, ls='none', fmt ='.')
     
     if make_image > 0:
         plt.savefig('Test.png', format = 'png')
     plt.show()
 
-#distance for best fit  for model line / distance of the error bar
 
+
+
+
+
+
+
+
+
+
+def multi_curvefit(fitfunction, x, y, dy, title, filter_name):
+
+    plt.rcParams["figure.figsize"] = (24,8)  
+    plt.xlabel("MJD")
+    plt.ylabel("Flux") 
+    plt.title(title)   
+    for i in range(len(filter_name)):
+#        x[i] = x[i] - np.mean(x[i])
+        number_of_colors = len(filter_name)
+        Colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+             for i in range(number_of_colors)]
+        ### guessparameter
+        # A = np.max(y[i]) - np.min(y[i])
+        # B = (np.max(y[i]) - y[i][np.argmax(x[i])])/ (x[i][np.argmax(y[i])] - np.max(x[i]))
+        # t0 = np.min(x[i])
+        # t1 = x[i][np.argmax(y[i])]
+        # Trise = x[i][np.argmax(y[i])] - np.min(x[i])
+        # Tfall = np.max(x[i]) - x[i][np.argmax(y[i])]
+        # c = np.min(y[i])
+        plt.errorbar(x[i],y[i],dy[i],fmt = '.', ecolor = 'red')
+
+        #g:
+        # A = 5.22e-6
+        # B = 5.987e-7
+        # t0 = 58204.34
+        # t1 = 58206.19
+        # Trise = 31
+        # Tfall = 10.54
+        # c = 1.306e-6
+
+
+        #r:
+        A = 6.576e-6
+        B = 5.91e-7
+        t0 = 58200.47
+        t1 = 58201.58
+        Trise = 5.79
+        Tfall = 16.73
+        c = 1.32e-07
+        guessparam = np.array([A, B, t0, t1, Trise, Tfall,c])
+        xsmooth1 = np.linspace(np.min(x[i]), np.max(x[i]), 100000)
+        fsmooth1 = fitfunction(xsmooth1 , *guessparam)
+        plt.plot(xsmooth1, fsmooth1, color = 'red')
+
+
+        #boundary 
+        initial_bounds = [3 * np.min(dy[i]), 0, 
+        np.min(x[i]) - 50, np.min(x[i]) - 45, 0.01, 1, -3 * np.min(dy[i])]
+        final_bounds = [100 * np.max(y[i]), (np.max(y[i])/150), np.max(x[i])+ 100, np.max(x[i])+160,
+        50, 300, 3 * np.max(dy[i])]
+
+        popt, pcov = opt.curve_fit(fitfunction, x[i], y[i],sigma=dy[i], p0 = guessparam ) #bounds = (initial_bounds, final_bounds)
+        # for i in range(len(popt)):
+        #     print('para',i,'=',popt[i],'+/-',np.sqrt(pcov[i,i]))
+        
+        fsmooth = fitfunction(xsmooth1, *popt)
+#       plt.plot(xsmooth1, fsmooth, c ='orange', label ='fit: A = %5.3f, B = %5.3f, t0= %5.3f, t1= %5.3f, Trise =%5.3f, Tfall = %5.3f, c = %5.3f' % tuple(popt))#filter_name[i]
+        plt.legend()
+        # Expect = fitfunction(x[i], *popt)
+        # score = []
+        # for j in range(len(Expect)):
+        #     score.append((Expect[j]- y[i][j])**2/(dy[i][j])**2)
+        # plt.scatter(x[i], y[i], c = score, cmap = 'summer')
+        # norm = matplotlib.colors.Normalize(vmin = min(score), vmax = max(score), clip = True)
+        # mapper = cm.ScalarMappable(norm=norm, cmap='viridis')
+        # x_color = np.array([(mapper.to_rgba(v)) for v in y[i]])     
+        # plt.errorbar(x[i],y[i],yerr=dy[i], linestyle="None", color= Colors[i])
+        # for x, y, e, color in zip(x[i], y[i], dy[i], x_color):
+        #     plt.plot(x, y, 'o', color=color)
+        #     plt.errorbar(x, y, e, lw=1, capsize=3, color=color)    
+    # plt.colorbar(label = 'least anomalous / the most anomalous', orientation="horizontal")
+    plt.show()
+
+
+
+def multi_curvefit_test(fitfunction, x, y, dy, title, filter_name):
+
+    plt.rcParams["figure.figsize"] = (24,12) 
+    plt.xlabel("MJD")
+    plt.ylabel("Flux") 
+    plt.title(title)   
+    for i in range(len(filter_name)):
+#        x[i] = x[i] - np.mean(x[i])
+        number_of_colors = len(filter_name)
+        Colors = ["#"+''.join([random.choice('0123456789ABCDEF') for j in range(6)])
+             for i in range(number_of_colors)]
+        ### guessparameter
+        # A = np.max(y[i]) - np.min(y[i])
+        # B = (np.max(y[i]) - y[i][np.argmax(x[i])])/ (x[i][np.argmax(y[i])] - np.max(x[i]))
+        # t0 = np.min(x[i])
+        # t1 = x[i][np.argmax(y[i])]
+        # Trise = x[i][np.argmax(y[i])] - np.min(x[i])
+        # Tfall = np.max(x[i]) - x[i][np.argmax(y[i])]
+        # c = np.min(y[i])
+
+        #boundary 
+        # A == (3 * sigma(np.min(dy[i])) , 100 * F(np.max(y[i])))
+        initial_bounds = [3 * np.min(dy[i]), 0, 
+        np.min(x[i]) - 50, np.min(x[i]) - 45, 0.01, 1, -3 * np.min(dy[i])]
+        final_bounds = [100 * np.max(y[i]), (np.max(y[i])/150), np.max(x[i])+ 100, np.max(x[i])+160,
+        50, 300, 3 * np.max(dy[i])]
+        A = 6.576e-6
+        B = 5.91e-7
+        t0 = 58200.47
+        t1 = 58201.58
+        Trise = 5.79
+        Tfall = 16.73
+        c = 1.32e-07
+        guessparam = np.array([A, B, t0, t1, Trise, Tfall,c])
+        xsmooth1 = np.linspace(np.min(x[i]), np.max(x[i]), 100000)
+        fsmooth1 = fitfunction(xsmooth1 , *guessparam)
+        plt.plot(xsmooth1, fsmooth1, color = 'red')       
+        popt, pcov = opt.curve_fit(fitfunction, x[i], y[i],sigma=dy[i], p0=guessparam) #bounds = (initial_bounds, final_bounds)
+        # for i in range(len(popt)):
+        #     print('para',i,'=',popt[i],'+/-',np.sqrt(pcov[i,i]))        
+        # fsmooth = fitfunction(xsmooth1, *popt)
+        # plt.plot(xsmooth1, fsmooth, c = Colors[i], label = filter_name[i])#filter_name[i]
+        plt.legend()
+        Expect = fitfunction(x[i], *guessparam)
+        score = []
+        for j in range(len(Expect)):
+            score.append((Expect[j]- y[i][j])**2/(dy[i][j])**2)
+        Colors_for_cmap = ['spring', 'summer','autumn', 'winter','cool','Wistia']
+        plt.scatter(x[i], y[i], c = score, cmap = Colors_for_cmap[i])
+        norm = matplotlib.colors.Normalize(vmin = min(score), vmax = max(score), clip = True)
+        mapper = cm.ScalarMappable(norm=norm, cmap=Colors_for_cmap[i])
+        x_color = np.array([(mapper.to_rgba(v)) for v in y[i]])     
+        plt.colorbar(label = '{filter} band :least anomalous / the most anomalous'.format(filter = filter_name[i]), orientation="horizontal")
+        plt.errorbar(x[i],y[i],yerr=dy[i], linestyle='None', color= Colors[i])
+        # for x, y, e, color in zip(x[i], y[i], dy[i], x_color):
+        #     plt.plot(x, y, 'o', color=color)
+        #     plt.errorbar(x, y, e, lw=1, capsize=3, color=color)    
+
+    plt.show()
